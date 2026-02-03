@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+<<<<<<< Updated upstream
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -140,4 +141,13 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
     );
   }
+=======
+import 'package:firebase_core/firebase_core.dart';
+import 'app.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(const App());
+>>>>>>> Stashed changes
 }

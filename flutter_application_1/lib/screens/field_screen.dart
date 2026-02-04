@@ -1,11 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/placement.dart';
 import '../state/app_state.dart';
-import '../services/firestore_service.dart';
+import '../services/local_db_service.dart';
 import 'catalog_screen.dart';
 
 class FieldScreen extends StatelessWidget {
@@ -14,13 +14,42 @@ class FieldScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
-    final uid = app.auth.currentUser!.uid;
-    final db = FirebaseFirestore.instance;
+    return _FieldScreenBody(uid: app.uid);
+  }
+}
 
-    final placementsQuery = db
-        .collection('users/$uid/fields/default/placements')
-        .orderBy('zIndex', descending: false);
+class _FieldScreenBody extends StatefulWidget {
+  final String? uid;
+  const _FieldScreenBody({required this.uid});
 
+  @override
+  State<_FieldScreenBody> createState() => _FieldScreenBodyState();
+}
+
+class _FieldScreenBodyState extends State<_FieldScreenBody> {
+  final db = LocalDbService();
+  List<Placement> placements = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlacements();
+  }
+
+  Future<void> _loadPlacements() async {
+    final data = await db.loadPlacements();
+    if (!mounted) return;
+    setState(() {
+      placements = data
+          .map((p) => Placement.fromMap(p['id'] as String, p))
+          .toList();
+      loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('マイフィールド'),
@@ -34,36 +63,50 @@ class FieldScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: placementsQuery.snapshots(),
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final placements = snap.data!.docs
-              .map((d) => Placement.fromMap(d.id, d.data()))
-              .toList();
-
-          return _FieldCanvas(uid: uid, placements: placements);
-        },
-      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : _FieldCanvas(
+              placements: placements,
+              onPlacementUpdated: (id, nx, ny) async {
+                await db.updatePlacement(id, {'x': nx, 'y': ny});
+                if (!mounted) return;
+                setState(() {
+                  placements = [
+                    for (final p in placements)
+                      if (p.id == id)
+                        Placement(
+                          id: p.id,
+                          creatureId: p.creatureId,
+                          imagePath: p.imagePath,
+                          x: nx,
+                          y: ny,
+                          scale: p.scale,
+                          rotation: p.rotation,
+                          zIndex: p.zIndex,
+                        )
+                      else
+                        p,
+                  ];
+                });
+              },
+            ),
     );
   }
 }
 
 class _FieldCanvas extends StatefulWidget {
-  final String uid;
   final List<Placement> placements;
-  const _FieldCanvas({required this.uid, required this.placements});
+  final Future<void> Function(String id, double nx, double ny) onPlacementUpdated;
+  const _FieldCanvas({
+    required this.placements,
+    required this.onPlacementUpdated,
+  });
 
   @override
   State<_FieldCanvas> createState() => _FieldCanvasState();
 }
 
 class _FieldCanvasState extends State<_FieldCanvas> {
-  final fs = FirestoreService();
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
@@ -82,14 +125,11 @@ class _FieldCanvasState extends State<_FieldCanvas> {
           // 住民たち
           for (final p in widget.placements)
             _DraggablePlacement(
-              uid: widget.uid,
               placement: p,
               canvasSize: size,
               onMoved: (nx, ny) async {
                 // 0..1に正規化して保存
-                await FirebaseFirestore.instance
-                    .doc('users/${widget.uid}/fields/default/placements/${p.id}')
-                    .set({'x': nx, 'y': ny}, SetOptions(merge: true));
+                await widget.onPlacementUpdated(p.id, nx, ny);
               },
             ),
         ],
@@ -99,13 +139,11 @@ class _FieldCanvasState extends State<_FieldCanvas> {
 }
 
 class _DraggablePlacement extends StatefulWidget {
-  final String uid;
   final Placement placement;
   final Size canvasSize;
   final Future<void> Function(double nx, double ny) onMoved;
 
   const _DraggablePlacement({
-    required this.uid,
     required this.placement,
     required this.canvasSize,
     required this.onMoved,
@@ -124,7 +162,7 @@ class _DraggablePlacementState extends State<_DraggablePlacement> {
     final px = nx * widget.canvasSize.width;
     final py = ny * widget.canvasSize.height;
 
-    final ref = FirebaseStorage.instance.ref(widget.placement.imagePath);
+    final imageFile = File(widget.placement.imagePath);
 
     return Positioned(
       left: px - 60,
@@ -139,25 +177,19 @@ class _DraggablePlacementState extends State<_DraggablePlacement> {
           });
         },
         onPanEnd: (_) => widget.onMoved(nx, ny),
-        child: FutureBuilder<String>(
-          future: ref.getDownloadURL(),
-          builder: (context, snap) {
-            if (!snap.hasData) {
-              return const SizedBox(width: 120, height: 120);
-            }
-            return Transform.rotate(
-              angle: widget.placement.rotation,
-              child: Transform.scale(
-                scale: widget.placement.scale,
-                child: Image.network(
-                  snap.data!,
-                  width: 120,
-                  height: 120,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-            );
-          },
+        child: Transform.rotate(
+          angle: widget.placement.rotation,
+          child: Transform.scale(
+            scale: widget.placement.scale,
+            child: Image.file(
+              imageFile,
+              width: 120,
+              height: 120,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) =>
+                  const SizedBox(width: 120, height: 120),
+            ),
+          ),
         ),
       ),
     );

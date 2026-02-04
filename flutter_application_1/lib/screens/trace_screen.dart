@@ -6,7 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/creature_defs.dart';
 import '../state/app_state.dart';
-import '../services/firestore_service.dart';
+import '../services/local_db_service.dart';
 import '../services/local_storage_service.dart';
 import '../widgets/trace_canvas.dart';
 import 'field_screen.dart';
@@ -25,13 +25,13 @@ class _TraceScreenState extends State<TraceScreen> {
   TraceResult? lastResult;
   bool saving = false;
 
-  final fs = FirestoreService();
-  final st = StorageService();
+  final db = LocalDbService();
+  final st = LocalStorageService();
 
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
-    final uid = app.auth.currentUser!.uid;
+    final uid = app.uid;
 
     final creature = creatures.firstWhere((c) => c.id == widget.creatureId);
 
@@ -89,7 +89,7 @@ class _TraceScreenState extends State<TraceScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: (saving || !(lastResult?.cleared ?? false))
+                    onPressed: (saving || uid == null || !(lastResult?.cleared ?? false))
                         ? null
                         : () => _saveAndGoField(uid, creature.id),
                     icon: const Icon(Icons.auto_awesome),
@@ -106,11 +106,12 @@ class _TraceScreenState extends State<TraceScreen> {
     );
   }
 
-  Future<void> _saveAndGoField(String uid, String creatureId) async {
+  Future<void> _saveAndGoField(String? uid, String creatureId) async {
+    if (uid == null) {
+      return;
+    }
     setState(() => saving = true);
     try {
-      await fs.ensureUserDoc(uid);
-
       // RepaintBoundary を PNG bytes に
       final boundary =
           repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
@@ -118,25 +119,25 @@ class _TraceScreenState extends State<TraceScreen> {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final Uint8List pngBytes = byteData!.buffer.asUint8List();
 
-      // Storage へアップロード
+      // ローカル保存
       final placementId = const Uuid().v4();
-      final path = 'users/$uid/drawings/$creatureId/$placementId.png';
-      await st.uploadPngBytes(path: path, bytes: pngBytes);
-
-      // Firestore：アンロック + 配置を追加（初期位置は中央）
-      await fs.unlockCreature(uid, creatureId);
-      await fs.addPlacement(
-        uid: uid,
-        fieldId: 'default',
-        placementId: placementId,
+      final path = await st.saveDrawingPng(
         creatureId: creatureId,
-        imagePath: path,
-        x: 0.5,
-        y: 0.6,
-        scale: 1.0,
-        rotation: 0.0,
-        zIndex: DateTime.now().millisecondsSinceEpoch,
+        placementId: placementId,
+        bytes: pngBytes,
       );
+
+      // ローカル配置を追加（初期位置は中央）
+      await db.addPlacement({
+        'id': placementId,
+        'creatureId': creatureId,
+        'imagePath': path,
+        'x': 0.5,
+        'y': 0.6,
+        'scale': 1.0,
+        'rotation': 0.0,
+        'zIndex': DateTime.now().millisecondsSinceEpoch,
+      });
 
       if (!mounted) return;
       Navigator.pushReplacement(

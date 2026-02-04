@@ -1,0 +1,60 @@
+import '../models/creature.dart';
+import '../models/checkpoint.dart';
+
+const creatures = <Creature>[
+  Creature(
+    id: 'trilobite',
+    name: 'さんようちゅう',
+    category: 'sea',
+    templateAsset: 'assets/templates/trilobite.png',
+    checkpoints: [
+      Checkpoint(0.20, 0.45),
+      Checkpoint(0.30, 0.40),
+      Checkpoint(0.40, 0.38),
+      Checkpoint(0.55, 0.40),
+      Checkpoint(0.70, 0.45),
+      Checkpoint(0.55, 0.55),
+      Checkpoint(0.40, 0.60),
+      Checkpoint(0.28, 0.55),
+    ],
+    hitRadius: 0.06,
+    clearRate: 0.6,
+  ),
+  Creature(
+    id: 'ammonite',
+    name: 'アンモナイト',
+    category: 'sea',
+    templateAsset: 'assets/templates/ammonite.png',
+    checkpoints: [
+      Checkpoint(0.50, 0.25),
+      Checkpoint(0.65, 0.35),
+      Checkpoint(0.70, 0.50),
+      Checkpoint(0.62, 0.65),
+      Checkpoint(0.48, 0.72),
+      Checkpoint(0.35, 0.65),
+      Checkpoint(0.30, 0.50),
+      Checkpoint(0.38, 0.35),
+      Checkpoint(0.50, 0.42),
+    ],
+    hitRadius: 0.06,
+    clearRate: 0.6,
+  ),
+  Creature(
+    id: 'trex',
+    name: 'ティラノサウルス',
+    category: 'land',
+    templateAsset: 'assets/templates/trex.png',
+    checkpoints: [
+      Checkpoint(0.35, 0.25),
+      Checkpoint(0.55, 0.25),
+      Checkpoint(0.62, 0.38),
+      Checkpoint(0.60, 0.55),
+      Checkpoint(0.50, 0.70),
+      Checkpoint(0.40, 0.72),
+      Checkpoint(0.32, 0.55),
+      Checkpoint(0.28, 0.40),
+    ],
+    hitRadius: 0.06,
+    clearRate: 0.55,
+  ),
+];

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-<<<<<<< Updated upstream
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -30,7 +29,7 @@ class MyApp extends StatelessWidget {
         //
         // This works for code too, not just values: Most code changes can be
         // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
@@ -67,6 +66,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _loadCounter() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _counter = prefs.getInt(_counterKey) ?? 0;
     });
@@ -149,5 +151,5 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   runApp(const App());
->>>>>>> Stashed changes
+Stashed changes
 }
